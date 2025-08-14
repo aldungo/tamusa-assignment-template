@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "question": "REPL",
+    "keywords": ["stands for", "Read", "Evaluate", "Print", "Loop", "an immediate program writing"]
+  },
+  {
+    "id": 2,
+    "question": "Java API",
+    "keywords": ["Java", "API", "Application", "Program", "Interface", "library", "predefined", "classes", "interfaces", "developing", "programs"]
+  }
+]
