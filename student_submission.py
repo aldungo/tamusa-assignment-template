@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+Enhanced Student Assignment Submission Script
+Generates both Word document and JSON data for autograding in GitHub Classroom
+"""
+
+from docx import Document
+from docx.shared import Pt
+import json
+import datetime
+import os
+import re
+
+# Define the assignment questions with metadata for autograding
+questions = [
+    {
+        "id": "q1_definitions",
+        "points": 40,
+        "type": "definitions",
+        "question": "1. (40 points) Briefly define (one to two sentences) each of the following ten terms:\n- REPL\n- Java API\n- JDK\n- Variable\n- Data type\n- Variable declaration\n- Assignment statement\n- Expression\n- Constant\n- Literal",
+        "terms": ["REPL", "Java API", "JDK", "Variable", "Data type", "Variable declaration", "Assignment statement", "Expression", "Constant", "Literal"],
+        "auto_gradable": True
+    },
+    {
+        "id": "q2_high_level",
+        "points": 12,
+        "type": "essay",
+        "question": "2. (12 points) Why is it ideal to write programs in a high-level language instead of a low-level language?",
+        "keywords": ["abstraction", "portable", "readable", "maintainable", "productivity", "syntax"],
+        "auto_gradable": True
+    },
+    {
+        "id": "q3_declarations", 
+        "points": 12,
+        "type": "code",
+        "question": "3. (12 points) Provide variable or constant declarations and initializations for:\n- double length = 23.6\n- float width = 14.7\n- long distance = 3172900000\n- final int speedOfSound = 343",
+        "expected_patterns": [
+            r"double\s+length\s*=\s*23\.6",
+            r"float\s+width\s*=\s*14\.7[fF]?",
+            r"long\s+distance\s*=\s*3172900000[lL]?",
+            r"final\s+int\s+speedOfSound\s*=\s*343"
+        ],
+        "auto_gradable": True
+    },
+    {
+        "id": "q4_modulo",
+        "points": 12,
+        "type": "calculation",
+        "question": "4. (12 points) Indicate the result of performing the remainder operation:\n- 40 % 17\n- 120 % 60\n- (65 + 8) % 25\n- (97 * 3 + 6) % 25",
+        "expected_answers": ["6", "0", "23", "6"],
+        "auto_gradable": True
+    },
+    {
+        "id": "q5_sphere_volume",
+        "points": 12,
+        "type": "code",
+        "question": "5. (12 points) Write a short program that requests a radius and calculates the volume of a sphere using: (4/3) * π * r^3",
+        "required_elements": ["input", "radius", "volume", "4/3", "Math.PI", "Math.pow"],
+        "auto_gradable": True
+    },
+    {
+        "id": "q6_debugging",
+        "points": 12,
+        "type": "debugging",
+        "question": "6. (12 points) Identify the problem in each code snippet:\n- int userInput = 20;\n- double calculation = 50 / (userInput – 20);\n- int total = 2000000000;\n- int withdrawal = 1000000000;\n- total += withdrawal;\n- long toPluto = 3315000000L;\n- int toTheSun = 92955807;\n- int totalDistance = toPluto + toTheSun;",
+        "expected_issues": ["division by zero", "integer overflow", "type mismatch"],
+        "auto_gradable": True
+    }
+]
+
+def get_student_info():
+    """Get student information with validation"""
+    print("=== CSCI 1436 Programming Fundamentals I - Assignment #1 ===")
+    print("This submission will be auto-graded in GitHub Classroom")
+    print("=" * 60)
+    
+    first_name = input("Enter your first name: ").strip()
+    last_name = input("Enter your last name: ").strip()
+    student_id = input("Enter your student ID: ").strip()
+    
+    return first_name, last_name, student_id
+
+def collect_responses(questions):
+    """Collect student responses with metadata"""
+    responses = {}
+    
+    print(f"\nPlease answer all {len(questions)} questions:")
+    print("=" * 40)
+    
+    for i, question_data in enumerate(questions, 1):
+        print(f"\nQuestion {i} ({question_data['points']} points):")
+        print(question_data['question'])
+        print("-" * 40)
+        
+        if question_data['type'] == 'code':
+            print("💡 Tip: You can write multiple lines. Type 'END' on a new line when finished.")
+            response_lines = []
+            while True:
+                line = input()
+                if line.strip() == 'END':
+                    break
+                response_lines.append(line)
+            response = '\n'.join(response_lines)
+        else:
+            response = input("Your answer: ")
+        
+        responses[question_data['id']] = {
+            'question_num': i,
+            'question_id': question_data['id'],
+            'question_type': question_data['type'],
+            'points': question_data['points'],
+            'response': response,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'auto_gradable': question_data['auto_gradable']
+        }
+    
+    return responses
+
+def create_word_document(first_name, last_name, student_id, questions, responses):
+    """Create the Word document for Turnitin submission"""
+    doc = Document()
+    
+    # Header
+    doc.add_heading("CSCI 1436 Programming Fundamentals I", level=1)
+    doc.add_heading("Assignment #1", level=2)
+    doc.add_paragraph(f"Student: {first_name} {last_name}")
+    doc.add_paragraph(f"Student ID: {student_id}")
+    doc.add_paragraph(f"Submission Date: {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}")
+    doc.add_paragraph("")
+    
+    # Questions and responses
+    for question_data in questions:
+        question_id = question_data['id']
+        response_data = responses[question_id]
+        
+        doc.add_paragraph(f"Question {response_data['question_num']}:", style='Heading 3')
+        doc.add_paragraph(question_data['question'])
+        
+        # Add response
+        response_para = doc.add_paragraph("Answer:")
+        response_para.add_run(f"\n{response_data['response']}")
+        response_para.runs[-1].font.size = Pt(11)
+        doc.add_paragraph("")
+    
+    # Save document
+    filename = f"Assignment1_{first_name}_{last_name}.docx"
+    doc.save(filename)
+    return filename
+
+def create_autograding_data(first_name, last_name, student_id, responses):
+    """Create JSON data for GitHub Classroom autograding"""
+    submission_data = {
+        "assignment_info": {
+            "course": "CSCI 1436",
+            "assignment": "Assignment #1",
+            "total_points": sum(q['points'] for q in questions),
+            "submission_timestamp": datetime.datetime.now().isoformat()
+        },
+        "student_info": {
+            "first_name": first_name,
+            "last_name": last_name,
+            "student_id": student_id,
+            "full_name": f"{first_name} {last_name}"
+        },
+        "responses": responses,
+        "metadata": {
+            "version": "1.0",
+            "auto_gradable_questions": len([q for q in questions if q['auto_gradable']]),
+            "total_questions": len(questions)
+        }
+    }
+    
+    # Save JSON file for autograding
+    json_filename = f"submission_{first_name}_{last_name}.json"
+    with open(json_filename, 'w') as f:
+        json.dump(submission_data, f, indent=2)
+    
+    return json_filename
+
+def create_github_files():
+    """Create necessary files for GitHub Classroom setup"""
+    
+    # Create .github/classroom directory
+    os.makedirs('.github/classroom', exist_ok=True)
+    
+    # Create autograding.json for GitHub Classroom
+    autograding_config = {
+        "tests": [
+            {
+                "name": "Question 1 - Definitions",
+                "setup": "",
+                "run": "python autograder.py q1_definitions",
+                "input": "",
+                "output": "",
+                "comparison": "included",
+                "timeout": 10,
+                "points": 40
+            },
+            {
+                "name": "Question 2 - High Level Languages", 
+                "setup": "",
+                "run": "python autograder.py q2_high_level",
+                "input": "",
+                "output": "",
+                "comparison": "included",
+                "timeout": 10,
+                "points": 12
+            },
+            {
+                "name": "Question 3 - Variable Declarations",
+                "setup": "",
+                "run": "python autograder.py q3_declarations", 
+                "input": "",
+                "output": "",
+                "comparison": "included",
+                "timeout": 10,
+                "points": 12
+            },
+            {
+                "name": "Question 4 - Modulo Operations",
+                "setup": "",
+                "run": "python autograder.py q4_modulo",
+                "input": "",
+                "output": "",
+                "comparison": "included", 
+                "timeout": 10,
+                "points": 12
+            },
+            {
+                "name": "Question 5 - Sphere Volume Program",
+                "setup": "",
+                "run": "python autograder.py q5_sphere_volume",
+                "input": "",
+                "output": "",
+                "comparison": "included",
+                "timeout": 10,
+                "points": 12
+            },
+            {
+                "name": "Question 6 - Debugging",
+                "setup": "",
+                "run": "python autograder.py q6_debugging",
+                "input": "",
+                "output": "",
+                "comparison": "included",
+                "timeout": 10,
+                "points": 12
+            }
+        ]
+    }
+    
+    with open('.github/classroom/autograding.json', 'w') as f:
+        json.dump(autograding_config, f, indent=2)
+    
+    print("✅ Created GitHub Classroom autograding configuration")
+
+def main():
+    """Main function"""
+    try:
+        # Get student information
+        first_name, last_name, student_id = get_student_info()
+        
+        # Collect responses
+        responses = collect_responses(questions)
+        
+        # Create Word document for Turnitin
+        word_file = create_word_document(first_name, last_name, student_id, questions, responses)
+        
+        # Create JSON data for autograding
+        json_file = create_autograding_data(first_name, last_name, student_id, responses)
+        
+        # Create GitHub Classroom files (instructor setup)
+        if input("\nAre you setting up the assignment template? (y/n): ").lower() == 'y':
+            create_github_files()
+        
+        print(f"\n🎉 Assignment completed successfully!")
+        print(f"📄 Word document: {word_file} (submit to Turnitin)")
+        print(f"📊 Autograding data: {json_file} (will be processed by GitHub Classroom)")
+        print(f"\n📚 Next steps:")
+        print(f"   1. Upload {word_file} to Turnitin")
+        print(f"   2. Commit and push {json_file} to GitHub Classroom")
+        print(f"   3. Your assignment will be auto-graded upon submission")
+        
+    except KeyboardInterrupt:
+        print("\n❌ Assignment submission cancelled.")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+
+if __name__ == "__main__":
+    main()
